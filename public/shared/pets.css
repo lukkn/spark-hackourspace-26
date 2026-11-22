@@ -1,0 +1,41 @@
+/* Pet animations, shared by kiosk and dashboard. */
+.pet { display: block; width: 100%; height: 100%; overflow: visible; }
+.pet .pet-body, .pet .pet-eyes, .pet .pet-arm, .pet .pet-antenna, .pet .pet-tear, .pet .pet-shadow {
+  transform-box: fill-box; transform-origin: center;
+}
+.pet .pet-body { transform-origin: 50% 100%; animation: pet-bob 3.2s ease-in-out infinite; }
+.pet .pet-eyes { animation: pet-blink 5s infinite; }
+.pet .pet-antenna { animation: pet-glow 2s ease-in-out infinite; }
+.pet .pet-tear { animation: pet-tear 2.4s ease-in infinite; }
+
+.pet.mood-ecstatic .pet-body { animation: pet-bounce .9s ease-in-out infinite; }
+.pet.mood-ecstatic .pet-arm-l { transform-origin: 100% 50%; animation: pet-wave-l .9s ease-in-out infinite; }
+.pet.mood-ecstatic .pet-arm-r { transform-origin: 0% 50%; animation: pet-wave-r .9s ease-in-out infinite; }
+.pet.mood-happy .pet-body { animation: pet-bob 2s ease-in-out infinite; }
+.pet.mood-sad .pet-body { animation: pet-sway 4s ease-in-out infinite; }
+.pet.mood-gloomy .pet-body { animation: pet-slump 5s ease-in-out infinite; }
+
+.pet.celebrating .pet-body { animation: pet-jump .7s cubic-bezier(.3,.7,.4,1) infinite; }
+.pet.celebrating .pet-shadow { animation: pet-shadow .7s cubic-bezier(.3,.7,.4,1) infinite; }
+.pet.celebrating .pet-arm-l { transform-origin: 100% 50%; animation: pet-wave-l .35s ease-in-out infinite; }
+.pet.celebrating .pet-arm-r { transform-origin: 0% 50%; animation: pet-wave-r .35s ease-in-out infinite; }
+
+/* Short "boop" when a student interacts. */
+.pet.booped .pet-body { animation: pet-boop .5s ease-out 1; }
+
+@keyframes pet-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+@keyframes pet-bounce { 0%,100% { transform: translateY(0) scale(1,1) } 40% { transform: translateY(-12px) scale(.97,1.03) } 80% { transform: translateY(0) scale(1.04,.96) } }
+@keyframes pet-sway { 0%,100% { transform: rotate(-2deg) } 50% { transform: rotate(2deg) } }
+@keyframes pet-slump { 0%,100% { transform: scale(1.02,.96) } 50% { transform: scale(1.04,.93) } }
+@keyframes pet-jump { 0%,100% { transform: translateY(0) scale(1.06,.94) } 15% { transform: translateY(0) scale(.95,1.06) } 50% { transform: translateY(-30px) rotate(-4deg) } }
+@keyframes pet-shadow { 0%,100% { transform: scale(1) } 50% { transform: scale(.6); opacity: .06 } }
+@keyframes pet-boop { 0% { transform: scale(1) } 30% { transform: scale(1.1,.9) } 60% { transform: scale(.95,1.06) translateY(-6px) } 100% { transform: scale(1) } }
+@keyframes pet-blink { 0%,94%,100% { transform: scaleY(1) } 97% { transform: scaleY(.1) } }
+@keyframes pet-glow { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
+@keyframes pet-wave-l { 0%,100% { transform: rotate(0) } 50% { transform: rotate(25deg) } }
+@keyframes pet-wave-r { 0%,100% { transform: rotate(0) } 50% { transform: rotate(-25deg) } }
+@keyframes pet-tear { 0% { transform: translateY(0); opacity: 0 } 20% { opacity: 1 } 100% { transform: translateY(14px); opacity: 0 } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pet *, .pet { animation: none !important; }
+}

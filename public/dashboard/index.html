@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1222">
+  <title>Spark Pets Live</title>
+  <meta name="description" content="Live happiness and activity for Byte (CS) and Sigma (DS). View only.">
+  <link rel="stylesheet" href="/shared/pets.css">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="logo">✦</span> Spark Pets <span class="tag">live</span></div>
+    <div class="today" id="today"></div>
+    <div class="live" id="live"><i></i><span>Connecting…</span></div>
+  </header>
+
+  <section class="rivalry" aria-label="Points today, CS vs DS">
+    <span class="r-label cs" id="r-cs">Byte 0</span>
+    <div class="r-track"><i class="cs" id="r-cs-bar"></i><i class="ds" id="r-ds-bar"></i></div>
+    <span class="r-label ds" id="r-ds">0 Sigma</span>
+  </section>
+
+  <main class="pets" id="pets"></main>
+
+  <section class="lower">
+    <article class="panel">
+      <header class="panel-h">
+        <h2>Points per day</h2>
+        <div class="legend" aria-hidden="true">
+          <span><i class="sw cs"></i>Byte · CS</span>
+          <span><i class="sw ds"></i>Sigma · DS</span>
+        </div>
+      </header>
+      <div class="chart" id="week-chart"></div>
+      <details class="table-view">
+        <summary>Show as table</summary>
+        <table id="week-table"></table>
+      </details>
+    </article>
+    <article class="panel">
+      <header class="panel-h"><h2>Live activity</h2></header>
+      <ol class="feed" id="feed"></ol>
+    </article>
+  </section>
+
+  <div class="banner" id="banner" hidden></div>
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <footer class="foot">View only · interact with the pets at their kiosks in the Spark space</footer>
+
+  <script type="module" src="/dashboard/dashboard.js"></script>
+</body>
+</html>

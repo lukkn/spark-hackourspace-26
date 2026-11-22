@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "spark-pets", "runtimeExecutable": "node", "runtimeArgs": ["server/index.js", "--demo"], "port": 3000 }
+  ]
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spark Pets – Assets</title>
+  <link rel="stylesheet" href="/shared/pets.css">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; background: #f6f5fb; color: #1d1b2c; }
+    h2 { margin: 28px 0 8px; }
+    .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    figure { margin: 0; background: #fff; border-radius: 14px; padding: 12px; text-align: center; box-shadow: 0 1px 3px #0001; }
+    figure div { height: 130px; }
+    figcaption { font-size: 13px; color: #666; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Spark Pets – mood sheet</h1>
+  <p>Static SVGs of every state live next to this page (e.g. <a href="cs-happy.svg">cs-happy.svg</a>). Regenerate with <code>npm run export-assets</code>.</p>
+  <div id="sheet"></div>
+  <script type="module">
+    import { renderPet, MOOD_LABEL } from '/shared/pets.js';
+    const moods = ['ecstatic', 'happy', 'okay', 'sad', 'gloomy'];
+    document.getElementById('sheet').innerHTML = [['cs', 'Byte (Computer Science)'], ['ds', 'Sigma (Data Science)']]
+      .map(([id, name]) => `<h2>${name}</h2><div class="row">${
+        moods.map((m) => `<figure><div>${renderPet(id, m)}</div><figcaption>${MOOD_LABEL[m]}</figcaption></figure>`).join('')
+      }<figure><div>${renderPet(id, 'ecstatic', { celebrate: true })}</div><figcaption>Celebrating</figcaption></figure></div>`).join('');
+  </script>
+</body>
+</html>
