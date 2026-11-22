@@ -1,8 +1,0 @@
-[
-  { "uid": "04:A1:CS:00:00:01", "name": "Ada Lovelace", "major": "cs", "demo": true },
-  { "uid": "04:A1:CS:00:00:02", "name": "Alan Turing", "major": "cs", "demo": true },
-  { "uid": "04:A1:CS:00:00:03", "name": "Grace Hopper", "major": "cs", "demo": true },
-  { "uid": "04:B2:DS:00:00:01", "name": "Florence Nightingale", "major": "ds", "demo": true },
-  { "uid": "04:B2:DS:00:00:02", "name": "John Tukey", "major": "ds", "demo": true },
-  { "uid": "04:B2:DS:00:00:03", "name": "Hadley Wickham", "major": "ds", "demo": true }
-]

@@ -1,7 +1,11 @@
 // Kiosk: the "physical" home of one pet. Students tap an NFC ID card here,
-// then log actions. All writes go to /api/device/* with the device key.
+// then log actions. Writes go to Firestore as the password-protected kiosk account.
 import { renderPet, MOOD_LABEL } from '/shared/pets.js';
 import { confetti } from '/shared/confetti.js';
+import { PETS, ACTIONS, SESSION_TTL_SEC } from '/shared/rules.js';
+import {
+  listenState, onKioskAuth, kioskLogin, kioskLogout, seedDemoStudents, demoCards, registerCard, tap, logAction,
+} from '/shared/data.js';
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -12,47 +16,67 @@ const store = {
 // ---------- Device configuration ----------
 const params = new URLSearchParams(location.search);
 if (params.get('pet')) store.set('spark.pet', params.get('pet'));
-if (params.get('key')) store.set('spark.key', params.get('key'));
-if (params.has('pet') || params.has('key')) history.replaceState(null, '', location.pathname); // hide key from URL bar
+if (params.has('demo')) store.set('spark.demo', params.get('demo') === '1' ? '1' : '');
+if (params.has('pet') || params.has('demo')) history.replaceState(null, '', location.pathname);
 
 let petId = store.get('spark.pet');
-let deviceKey = store.get('spark.key');
+const demo = store.get('spark.demo') === '1';
 let deviceId = store.get('spark.device');
 if (!deviceId) { deviceId = `kiosk-${Math.random().toString(36).slice(2, 8)}`; store.set('spark.device', deviceId); }
 
-let config;
 let petState = null;
-let session = null; // { token, student, cooldowns, expires, ttl }
+let session = null; // { uid, student, cooldowns, cooldownAt, expires }
 let celebrating = false;
+let started = false;
 
-async function api(path, body) {
-  const res = await fetch(`/api/device/${path}`, {
-    method: body ? 'POST' : 'GET',
-    headers: { 'Content-Type': 'application/json', 'X-Device-Key': deviceKey || '', 'X-Device-Id': deviceId },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({ ok: false, message: 'Server error' }));
-  if (res.status === 401 && data.error === 'bad_device_key') {
-    showModal({ title: 'Kiosk not authorized', body: 'The device key is wrong. Re-open the kiosk link from the server console.' });
-    store.set('spark.key', '');
-  }
-  return data;
+function friendlyError(e) {
+  console.error(e);
+  if (e?.code === 'permission-denied') return 'This kiosk is not signed in. Unlock it again.';
+  if (e?.code === 'unavailable') return 'Offline. Check the internet connection.';
+  return 'Something went wrong. Try again.';
 }
 
-// ---------- Setup screen ----------
+// ---------- Login / setup screen ----------
+let setupWired = false;
 function showSetup() {
   $('setup').hidden = false;
   $('kiosk').hidden = true;
+  if (setupWired) return;
+  setupWired = true;
   document.querySelectorAll('[data-art]').forEach((el) => { el.innerHTML = renderPet(el.dataset.art, 'happy'); });
-  $('setup-key').value = deviceKey || '';
+  let chosen = PETS[petId] ? petId : null;
+  const pick = (id) => {
+    chosen = id;
+    document.querySelectorAll('.pet-pick button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.pet === id)));
+  };
+  if (chosen) pick(chosen);
   document.querySelectorAll('.pet-pick button').forEach((b) => b.addEventListener('click', () => {
-    const key = $('setup-key').value.trim();
-    if (!key) { $('setup-key').focus(); return; }
-    store.set('spark.pet', b.dataset.pet);
-    store.set('spark.key', key);
-    location.reload();
+    pick(b.dataset.pet);
+    $('setup-password').focus();
   }));
+
+  $('setup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('setup-error');
+    err.hidden = true;
+    if (!chosen) { err.textContent = 'Pick which pet lives here.'; err.hidden = false; return; }
+    $('setup-go').disabled = true;
+    const res = await kioskLogin($('setup-password').value);
+    $('setup-go').disabled = false;
+    if (!res.ok) {
+      err.textContent = res.message;
+      err.hidden = false;
+      $('setup-password').select();
+      return;
+    }
+    $('setup-password').value = '';
+    store.set('spark.pet', chosen);
+    petId = chosen; // onKioskAuth fires next and starts the kiosk
+  });
+  $('setup-password').focus();
 }
+
+$('lock').addEventListener('click', async () => { await kioskLogout(); location.reload(); });
 
 // ---------- Rendering ----------
 function drawPet({ boop = false } = {}) {
@@ -103,11 +127,13 @@ function toast(msg, { kind = '', ms = 2600 } = {}) {
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 
-function showModal({ title, body, art, html = false, ms }) {
+function showModal({ title, body, art, html = false, ms, extra }) {
   $('modal-title').textContent = title;
   $('modal-body')[html ? 'innerHTML' : 'textContent'] = body;
   $('modal-art').innerHTML = art || '';
   $('modal-art').hidden = !art;
+  $('modal-extra').innerHTML = '';
+  if (extra) $('modal-extra').appendChild(extra);
   $('modal').hidden = false;
   clearTimeout(showModal.timer);
   if (ms) showModal.timer = setTimeout(hideModal, ms);
@@ -142,25 +168,72 @@ const SOUNDS = {
   party: [[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.3], [784, 0.1], [1047, 0.4]],
 };
 
+// ---------- Registering unknown cards (organizers) ----------
+function registerButton(uid) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn ghost';
+  b.textContent = 'Organizer: register this card';
+  b.addEventListener('click', () => openRegister(uid));
+  return b;
+}
+
+function openRegister(uid) {
+  hideModal();
+  $('reg-uid').textContent = uid;
+  $('reg-name').value = '';
+  $('reg-major').value = petId;
+  $('reg-password').value = '';
+  $('reg-error').hidden = true;
+  $('register').hidden = false;
+  $('reg-name').focus();
+}
+$('reg-cancel').addEventListener('click', () => { $('register').hidden = true; });
+$('reg-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('reg-save').disabled = true;
+  const res = await registerCard({
+    uid: $('reg-uid').textContent,
+    name: $('reg-name').value,
+    major: $('reg-major').value,
+    password: $('reg-password').value,
+  }).catch((err) => ({ ok: false, message: friendlyError(err) }));
+  $('reg-save').disabled = false;
+  $('reg-password').value = '';
+  if (!res.ok) { $('reg-error').textContent = res.message; $('reg-error').hidden = false; return; }
+  $('register').hidden = true;
+  toast(`Card registered for ${$('reg-name').value.trim()}. Tap it again!`, { ms: 4000 });
+  lastTap = { uid: null, at: 0 };
+});
+
 // ---------- Taps ----------
 let lastTap = { uid: null, at: 0 };
+let tapping = false;
 async function handleTap(rawUid) {
   const uid = String(rawUid || '').trim();
-  if (!uid) return;
+  if (!uid || tapping || !$('register').hidden) return;
   const now = Date.now();
   if (uid === lastTap.uid && now - lastTap.at < 2500) return; // reader double-fire
   lastTap = { uid, at: now };
   hideModal();
 
-  const res = await api('tap', { pet: petId, uid });
+  tapping = true;
+  let res;
+  try {
+    res = await tap({ petId, rawUid: uid, demo, deviceId });
+  } catch (e) {
+    res = { ok: false, message: friendlyError(e) };
+  } finally {
+    tapping = false;
+  }
+
   if (!res.ok) {
     chirp(SOUNDS.error);
     if (res.error === 'wrong_major') {
-      const theirs = config.pets[res.student.major];
       showModal({
         title: `Sorry ${res.student.name.split(' ')[0]}, wrong pet!`,
         body: res.message,
-        art: renderPet(theirs.id, 'happy'),
+        art: renderPet(res.student.major, 'happy'),
         ms: 6000,
       });
     } else if (res.error === 'unknown_card') {
@@ -169,15 +242,15 @@ async function handleTap(rawUid) {
         body: `${res.message}<br><br>Card id: <code>${res.uid}</code>`,
         html: true,
         art: renderPet(petId, 'okay'),
+        extra: registerButton(res.uid),
       });
-    } else if (res.error !== 'bad_device_key') {
+    } else {
       toast(res.message || 'Something went wrong', { kind: 'bad' });
     }
     return;
   }
 
   chirp(SOUNDS.tap);
-  if (session) await api('end', { session: session.token }); // a new student took over
   startSession(res);
   drawPet({ boop: true });
   if (res.checkin) floatPoints(`+${res.checkin.points}`);
@@ -186,25 +259,23 @@ async function handleTap(rawUid) {
 // ---------- Session ----------
 function startSession(res) {
   session = {
-    token: res.session,
+    uid: res.uid,
     student: res.student,
     cooldowns: res.cooldowns,
     cooldownAt: Date.now(),
-    ttl: res.sessionTtlSec,
-    expires: Date.now() + res.sessionTtlSec * 1000,
+    expires: Date.now() + SESSION_TTL_SEC * 1000,
   };
   const first = res.student.name.split(' ')[0];
   $('greet').textContent = res.checkin ? `Hi ${first}! Thanks for checking in` : `Welcome back, ${first}!`;
   $('greet-sub').textContent = res.checkin
-    ? `+${res.checkin.points} points for ${config.pets[petId].name}. What else did you do?`
-    : `You already checked in today. Log what you've been up to:`;
+    ? `+${res.checkin.points} points for ${PETS[petId].name}. What else did you do?`
+    : 'You already checked in today. Log what you\'ve been up to:';
   $('idle').hidden = true;
   $('session').hidden = false;
   renderActions();
 }
 
 function endSession() {
-  if (session) api('end', { session: session.token });
   session = null;
   $('session').hidden = true;
   $('idle').hidden = false;
@@ -220,7 +291,7 @@ function cooldownRemaining(id) {
 function renderActions() {
   const el = $('actions');
   el.innerHTML = '';
-  for (const [id, a] of Object.entries(config.actions)) {
+  for (const [id, a] of Object.entries(ACTIONS)) {
     if (a.kiosk === false) continue;
     const b = document.createElement('button');
     b.type = 'button';
@@ -237,10 +308,10 @@ function tickActions() {
   if (!session) return;
   for (const b of document.querySelectorAll('.action')) {
     const left = cooldownRemaining(b.dataset.action);
-    b.disabled = left > 0;
+    b.disabled = left > 0 || b.dataset.busy === '1';
     b.querySelector('.cd').textContent = left > 0 ? (left >= 60 ? `${Math.ceil(left / 60)}m` : `${left}s`) : '';
   }
-  const pct = Math.max(0, (session.expires - Date.now()) / (session.ttl * 1000));
+  const pct = Math.max(0, (session.expires - Date.now()) / (SESSION_TTL_SEC * 1000));
   $('session-bar').style.width = `${pct * 100}%`;
   if (pct <= 0) endSession();
 }
@@ -248,20 +319,29 @@ setInterval(tickActions, 1000);
 
 async function doAction(id, button) {
   if (!session) return;
+  const s = session;
+  button.dataset.busy = '1';
   button.disabled = true;
-  const res = await api('action', { session: session.token, action: id });
-  if (res.cooldowns) { session.cooldowns = res.cooldowns; session.cooldownAt = Date.now(); }
+  let res;
+  try {
+    res = await logAction({ petId, uid: s.uid, name: s.student.name, actionId: id, demo, deviceId });
+  } catch (e) {
+    res = { ok: false, message: friendlyError(e) };
+  } finally {
+    button.dataset.busy = '';
+  }
+  if (session !== s) return; // session ended meanwhile
+  if (res.cooldowns) { s.cooldowns = res.cooldowns; s.cooldownAt = Date.now(); }
   if (!res.ok) {
-    if (res.error === 'session_expired') { endSession(); toast('Session ended — tap your ID again.', { kind: 'bad' }); }
-    else toast(res.message || 'Could not log that', { kind: 'bad' });
+    toast(res.message || 'Could not log that', { kind: 'bad' });
     chirp(SOUNDS.error);
     tickActions();
     return;
   }
-  session.expires = Date.now() + session.ttl * 1000;
-  const a = config.actions[id];
+  s.expires = Date.now() + SESSION_TTL_SEC * 1000;
+  const a = ACTIONS[id];
   floatPoints(`+${a.points}`, button);
-  if (res.celebrate) celebrate(session.student.name.split(' ')[0], a);
+  if (res.celebrate) celebrate(s.student.name.split(' ')[0], a);
   else { chirp(SOUNDS.action); drawPet({ boop: true }); toast(`${a.emoji} ${a.label}! +${a.points}`); }
   tickActions();
 }
@@ -286,11 +366,14 @@ $('pet-art').addEventListener('click', () => {
 });
 
 // ---------- NFC input ----------
-// 1) Web NFC (Chrome on Android, needs HTTPS or localhost).
+// 1) Web NFC (Chrome on Android, needs HTTPS).
+let nfcOn = false;
 async function startWebNfc() {
+  if (nfcOn) return;
   try {
     const reader = new window.NDEFReader();
     await reader.scan();
+    nfcOn = true;
     reader.addEventListener('reading', (e) => {
       let uid = e.serialNumber;
       // Fallback: a text record written on the tag (e.g. "student:1234").
@@ -301,10 +384,9 @@ async function startWebNfc() {
       }
       handleTap(uid);
     });
-    reader.addEventListener('readingerror', () => toast('Could not read that card — try again.', { kind: 'bad' }));
+    reader.addEventListener('readingerror', () => toast('Could not read that card. Try again.', { kind: 'bad' }));
     $('nfc-start').hidden = true;
     $('idle-sub').textContent = 'Hold your card against the back of this phone.';
-    store.set('spark.nfc', '1');
   } catch (err) {
     toast(`NFC unavailable: ${err.message}`, { kind: 'bad', ms: 4000 });
   }
@@ -320,7 +402,7 @@ if ('NDEFReader' in window) {
 let buf = '';
 let lastKey = 0;
 document.addEventListener('keydown', (e) => {
-  if (e.target.matches?.('input, textarea')) return;
+  if (e.target.matches?.('input, textarea, select')) return;
   const now = performance.now();
   if (now - lastKey > 120) buf = '';
   lastKey = now;
@@ -332,14 +414,15 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// 3) Demo cards (simulated taps for laptops with no reader).
+// 3) Demo cards (simulated taps for devices with no reader).
 $('demo-toggle').addEventListener('click', async () => {
   const d = $('demo');
   d.hidden = !d.hidden;
   if (d.hidden) return;
-  const cards = await api('demo-cards');
+  let cards = [];
+  try { cards = await demoCards(); } catch (e) { toast(friendlyError(e), { kind: 'bad' }); }
   $('demo-cards').innerHTML = '';
-  for (const c of Array.isArray(cards) ? cards : []) {
+  for (const c of cards) {
     const b = document.createElement('button');
     b.type = 'button';
     b.innerHTML = `<span>${c.name}</span><small class="${c.major}">${c.major.toUpperCase()}</small>`;
@@ -348,25 +431,27 @@ $('demo-toggle').addEventListener('click', async () => {
   }
 });
 
-// ---------- Live state ----------
-function connectStream() {
-  const es = new EventSource('/api/stream');
-  es.addEventListener('open', () => $('conn').classList.remove('off'));
-  es.addEventListener('error', () => $('conn').classList.add('off'));
-  es.addEventListener('state', (e) => applyState(JSON.parse(e.data)));
-}
-
 // ---------- Boot ----------
-async function boot() {
-  config = await fetch('/api/config').then((r) => r.json());
-  if (!config.pets[petId] || !deviceKey) return showSetup();
-  const pet = config.pets[petId];
+function startKiosk() {
+  if (started) return;
+  started = true;
+  const pet = PETS[petId];
   document.body.dataset.pet = petId;
   document.title = `${pet.name} · Spark Pets Kiosk`;
   $('pet-name').textContent = pet.name;
   $('pet-major').textContent = `the ${pet.major} pet`;
+  $('setup').hidden = true;
   $('kiosk').hidden = false;
+  if (demo) $('demo-mode').hidden = false;
   drawPet();
-  connectStream();
+  listenState(applyState, {
+    onError: () => $('conn').classList.add('off'),
+  });
+  seedDemoStudents().catch((e) => console.warn('Could not seed demo students', e));
 }
-boot();
+
+onKioskAuth((user) => {
+  if (user && PETS[petId]) startKiosk();
+  else if (started) location.reload(); // signed out elsewhere
+  else showSetup();
+});

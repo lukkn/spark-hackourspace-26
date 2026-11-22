@@ -11,23 +11,28 @@
 <body>
   <!-- One-time device setup -->
   <section id="setup" class="screen" hidden>
-    <div class="card setup-card">
-      <h1>Set up this kiosk</h1>
+    <form class="card setup-card" id="setup-form">
+      <h1>Unlock this kiosk</h1>
       <p>Which pet lives on this device?</p>
-      <div class="pet-pick">
-        <button type="button" data-pet="cs"><span class="pick-art" data-art="cs"></span>Byte<small>Computer Science</small></button>
-        <button type="button" data-pet="ds"><span class="pick-art" data-art="ds"></span>Sigma<small>Data Science</small></button>
+      <div class="pet-pick" role="radiogroup" aria-label="Pet">
+        <button type="button" role="radio" data-pet="cs"><span class="pick-art" data-art="cs"></span>Byte<small>Computer Science</small></button>
+        <button type="button" role="radio" data-pet="ds"><span class="pick-art" data-art="ds"></span>Sigma<small>Data Science</small></button>
       </div>
-      <label>Device key <input id="setup-key" autocomplete="off" placeholder="from the server console"></label>
-      <p class="hint">Tip: open <code>/kiosk/?pet=cs&amp;key=…</code> to skip this screen.</p>
-    </div>
+      <label>Kiosk password
+        <input id="setup-password" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="setup-error" id="setup-error" role="alert" hidden></p>
+      <button class="btn setup-go" id="setup-go" type="submit">Unlock</button>
+      <p class="hint">Organizers only. The kiosk stays unlocked on this device until someone presses Lock kiosk (in Demo cards).</p>
+    </form>
   </section>
 
   <main id="kiosk" class="screen" hidden>
     <header class="top">
       <div class="who"><strong id="pet-name">Pet</strong> <span id="pet-major"></span></div>
       <div class="lvl"><span id="level">Lv 1</span><div class="xp"><i id="xp-bar"></i></div><span id="points">0 pts</span></div>
-      <div class="conn" id="conn" title="Connection to server">●</div>
+      <span class="demo-badge" id="demo-mode" hidden title="Cooldowns capped at 3s">demo</span>
+      <div class="conn" id="conn" title="Connection to Firebase">●</div>
     </header>
 
     <div class="stage">
@@ -64,6 +69,7 @@
     <aside id="demo" class="demo" hidden>
       <h3>Simulate an NFC tap</h3>
       <div id="demo-cards"></div>
+      <button type="button" class="lock-btn" id="lock">🔒 Lock kiosk</button>
     </aside>
   </main>
 
@@ -72,8 +78,32 @@
       <div class="modal-art" id="modal-art"></div>
       <h2 id="modal-title"></h2>
       <p id="modal-body"></p>
-      <button class="btn" id="modal-ok" type="button">OK</button>
+      <div class="modal-actions">
+        <div id="modal-extra"></div>
+        <button class="btn" id="modal-ok" type="button">OK</button>
+      </div>
     </div>
+  </div>
+
+  <!-- Organizer: register an unknown card -->
+  <div id="register" class="modal" hidden>
+    <form class="card modal-card reg-card" id="reg-form">
+      <h2>Register card</h2>
+      <p>Card id <code id="reg-uid"></code></p>
+      <label>Student name <input id="reg-name" required autocomplete="off"></label>
+      <label>Major
+        <select id="reg-major">
+          <option value="cs">Computer Science (Byte)</option>
+          <option value="ds">Data Science (Sigma)</option>
+        </select>
+      </label>
+      <label>Kiosk password <input id="reg-password" type="password" required autocomplete="current-password"></label>
+      <p class="setup-error" id="reg-error" role="alert" hidden></p>
+      <div class="modal-actions">
+        <button class="btn ghost" id="reg-cancel" type="button">Cancel</button>
+        <button class="btn" id="reg-save" type="submit">Register</button>
+      </div>
+    </form>
   </div>
 
   <script type="module" src="/kiosk/kiosk.js"></script>

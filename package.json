@@ -1,22 +1,17 @@
 {
   "name": "spark-pets",
   "version": "1.0.0",
-  "description": "Physical-digital pets for CS and DS majors: NFC kiosks + live read-only dashboard",
-  "main": "server/index.js",
+  "description": "Physical-digital pets for CS and DS majors: NFC kiosks + live read-only dashboard on Firebase",
   "scripts": {
-    "start": "node server/index.js",
-    "demo": "node server/index.js --demo",
-    "add-student": "node scripts/add-student.js",
-    "test": "node scripts/smoke-test.js",
-    "export-assets": "node scripts/export-assets.js",
-    "reset": "node scripts/reset-db.js"
+    "dev": "firebase serve --only hosting --port 5000",
+    "deploy": "firebase deploy --only hosting,firestore",
+    "export-assets": "node scripts/export-assets.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "express": "^4.22.3",
-    "sql.js": "^1.17.0"
-  },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "firebase-tools": "^15.37.0"
+  }
 }

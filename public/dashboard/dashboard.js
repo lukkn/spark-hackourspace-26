@@ -1,7 +1,10 @@
-// Read-only dashboard: subscribes to /api/stream and renders. It has no device
-// key and makes no write calls, so nobody can interact with the pets from here.
+// Read-only dashboard: listens to Firestore and renders. It never signs in, and
+// firestore.rules only let the kiosk account write, so nobody can interact
+// with the pets from here.
 import { renderPet, MOOD_LABEL } from '/shared/pets.js';
 import { confetti } from '/shared/confetti.js';
+import { PETS, ACTIONS } from '/shared/rules.js';
+import { listenState } from '/shared/data.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -222,17 +225,19 @@ function render() {
 }
 
 function connect() {
-  const es = new EventSource('/api/stream');
   const live = $('live');
-  es.addEventListener('open', () => { live.classList.add('on'); live.querySelector('span').textContent = 'Live'; });
-  es.addEventListener('error', () => { live.classList.remove('on'); live.querySelector('span').textContent = 'Reconnecting…'; });
-  es.addEventListener('state', (e) => { state = JSON.parse(e.data); render(); });
-  es.addEventListener('celebrate', (e) => celebrate(JSON.parse(e.data)));
+  const setLive = (on, text) => { live.classList.toggle('on', on); live.querySelector('span').textContent = text; };
+  listenState((s) => { state = s; setLive(true, 'Live'); render(); }, {
+    onEvent: (e) => { if (ACTIONS[e.action]?.celebrate) celebrate({ pet: e.pet, action: e.action, who: e.who }); },
+    onError: () => setLive(false, 'Connection problem'),
+  });
+  addEventListener('offline', () => setLive(false, 'Offline'));
+  addEventListener('online', () => state && setLive(true, 'Live'));
 }
 
 addEventListener('resize', () => state && renderChart());
 setInterval(() => state && renderFeed(), 30_000);
 
-config = await fetch('/api/config').then((r) => r.json());
+config = { pets: PETS, actions: ACTIONS };
 buildCards();
 connect();

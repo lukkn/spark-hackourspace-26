@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Everyone (the dashboard) can read pet stats and the activity feed.
+// Only the signed-in kiosk account can write anything or see the student roster.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isKiosk() {
+      return request.auth != null && request.auth.token.email == 'kiosk@spark-pets.app';
+    }
+    function validPet(p) { return p in ['cs', 'ds']; }
+    function validAction(a) {
+      return a in ['checkin', 'pet', 'snack', 'assignment', 'met_someone', 'helped', 'event', 'shipped'];
+    }
+
+    match /pets/{petId} {
+      allow read: if true;
+      allow write: if isKiosk() && validPet(petId)
+        && request.resource.data.keys().hasOnly(['happiness', 'happinessAt', 'points', 'counts'])
+        && request.resource.data.happiness is number
+        && request.resource.data.happiness >= 0 && request.resource.data.happiness <= 100;
+    }
+
+    match /days/{dayId} {
+      allow read: if true;
+      allow write: if isKiosk()
+        && request.resource.data.keys().hasOnly(['day', 'pet', 'points', 'counts'])
+        && validPet(request.resource.data.pet)
+        && dayId == request.resource.data.day + '_' + request.resource.data.pet;
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isKiosk()
+        && request.resource.data.keys().hasOnly(['pet', 'action', 'points', 'who', 'at', 'day', 'device'])
+        && validPet(request.resource.data.pet)
+        && validAction(request.resource.data.action)
+        && request.resource.data.points is int
+        && request.resource.data.points >= 0 && request.resource.data.points <= 100
+        && request.resource.data.who is string && request.resource.data.who.size() <= 40;
+      allow update, delete: if false; // the log is append-only
+    }
+
+    match /students/{uid} {
+      allow read: if isKiosk();
+      allow write: if isKiosk()
+        && request.resource.data.keys().hasOnly(['name', 'major', 'demo'])
+        && validPet(request.resource.data.major)
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80;
+    }
+
+    match /activity/{uid} {
+      allow read, write: if isKiosk();
+    }
+  }
+}

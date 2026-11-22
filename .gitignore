@@ -1,3 +1,4 @@
 node_modules/
-data/*.db
-data/*.db.tmp
+.firebase/
+firebase-debug.log
+firestore-debug.log

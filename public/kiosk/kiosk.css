@@ -40,6 +40,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .setup-card label { display: grid; gap: 6px; text-align: left; color: var(--muted); font-size: 14px; }
 .setup-card input { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid #ffffff22; background: var(--bg-2); color: var(--text); }
 .hint { color: var(--muted); font-size: 13px; }
+.pet-pick button[aria-checked="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--bg-2)); }
+.setup-go { width: 100%; margin-top: 16px; font-size: 17px; }
+.setup-go:disabled { opacity: .5; cursor: not-allowed; }
+.setup-error { color: var(--bad); font-weight: 700; margin: 10px 0 0; }
+.demo .lock-btn { justify-content: center; margin-top: 12px; background: transparent; border: 1px solid #ffffff22; color: var(--muted); }
 
 /* ---------- Kiosk layout ---------- */
 #kiosk {
@@ -145,4 +150,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .modal-card h2 { margin: 8px 0; }
 .modal-card p { color: var(--muted); font-size: 17px; }
 .modal-art { width: 140px; height: 140px; margin: 0 auto; }
+.modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.reg-card { text-align: left; display: grid; gap: 12px; width: 100%; }
+.reg-card h2, .reg-card > p { text-align: center; margin: 0; }
+.reg-card label { display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
+.reg-card input, .reg-card select { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid #ffffff22; background: var(--bg-2); color: var(--text); }
+.demo-badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; background: #ffb547; color: #1b1020; padding: 2px 8px; border-radius: 99px; }
 .modal-card code { background: var(--bg-2); padding: 2px 8px; border-radius: 6px; color: var(--text); user-select: all; }
